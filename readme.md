@@ -1,0 +1,122 @@
+# mermerd-flyway-github-action
+
+A reusable GitHub Actions workflow that automatically generates [Mermaid-JS](https://mermaid-js.github.io/mermaid/#/entityRelationshipDiagram) ERD diagrams from a PostgreSQL database built via [Flyway](https://flywaydb.org/) migrations, using [mermerd](https://github.com/KarnerTh/mermerd).
+
+## How it works
+
+1. Detects changes in the configured migration path(s) by comparing against the previous commit
+2. If changes are found, starts a **Docker Compose** project with PostgreSQL and Flyway
+3. Flyway applies all migration scripts from the provided path(s)
+4. **mermerd** generates an ERD diagram from the resulting database schema
+5. The diagram is injected into the README between `<!-- mermerd-start -->` / `<!-- mermerd-end -->` markers
+6. Changes are committed and pushed automatically
+
+## Usage
+
+### 1. Add markers to your README
+
+In your client repository's README (or any markdown file), add the markers where the diagram should appear:
+
+```markdown
+## Database Schema
+
+<!-- mermerd-start -->
+<!-- mermerd-end -->
+```
+
+Any existing content between the markers will be replaced on each run.
+
+### 2. Create a caller workflow
+
+In your client repository, create `.github/workflows/update-erd.yml`:
+
+```yaml
+name: Update ERD Diagram
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  update-erd:
+    uses: <your-org>/mermerd-flyway-github-action/.github/workflows/mermerd.yml@main
+    with:
+      migration_paths: 'templates/docker/flyway/sql/init,templates/docker/flyway/sql/tables'
+    permissions:
+      contents: write
+```
+
+### 3. That's it
+
+Whenever migration files change on push to `main`, the workflow will regenerate and commit the updated ERD diagram.
+
+## Inputs
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `migration_paths` | **Yes** | | Comma-separated list of migration SQL directory paths relative to repo root |
+| `readme_path` | No | `README.md` | Path to the markdown file containing the mermaid block markers |
+| `db_name` | No | `mermerd_db` | PostgreSQL database name for the temporary database |
+| `mermerd_version` | No | `0.13.0` | [mermerd release](https://github.com/KarnerTh/mermerd/releases) version |
+| `show_all_constraints` | No | `true` | Show all constraints, even for non-selected tables |
+| `show_descriptions` | No | `enumValues,columnComments,notNull` | Comma-separated descriptions to include |
+| `ignore_tables` | No | `flyway_schema_history` | Comma-separated table patterns to ignore (supports regex) |
+| `commit_message` | No | `chore: update mermerd ERD diagram` | Git commit message |
+
+## Full example
+
+```yaml
+name: Update ERD Diagram
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'db/migrations/**'
+
+jobs:
+  update-erd:
+    uses: <your-org>/mermerd-flyway-github-action/.github/workflows/mermerd.yml@main
+    with:
+      migration_paths: 'db/migrations/init,db/migrations/tables'
+      readme_path: 'docs/DATABASE.md'
+      db_name: 'my_service_db'
+      show_descriptions: 'enumValues,notNull'
+      ignore_tables: 'flyway_schema_history,temp_.*'
+      commit_message: 'docs: regenerate database ERD'
+    permissions:
+      contents: write
+```
+
+## Local testing
+
+A test script and dummy SQL migration are provided in the `test/` directory.
+
+```bash
+# Run the full pipeline (postgres + flyway + mermerd)
+./test/run-test.sh
+
+# Or step by step:
+docker compose -f docker-compose.yml up -d postgres
+docker compose -f docker-compose.yml run --rm flyway
+
+# Cleanup
+docker compose -f docker-compose.yml down -v
+```
+
+Defaults in [test/run-test.sh](test/run-test.sh) point to `test/sql`. Override any variable by exporting it before running, e.g. `export WORKSPACE_PATH=/path/to/client-repo`.
+
+## README marker format
+
+The workflow locates the mermaid diagram block using HTML comment markers:
+
+```markdown
+<!-- mermerd-start -->
+```mermaid
+erDiagram
+    ...
+```
+<!-- mermerd-end -->
+```
+
+Only one pair of markers per file is supported.

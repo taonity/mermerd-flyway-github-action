@@ -1,0 +1,212 @@
+name: Generate Mermerd ERD
+
+on:
+  workflow_call:
+    inputs:
+      migration_paths:
+        description: 'Comma-separated list of migration SQL directory paths relative to repo root'
+        required: true
+        type: string
+      readme_path:
+        description: 'Path to the README file containing the mermaid block markers'
+        required: false
+        default: 'README.md'
+        type: string
+      db_name:
+        description: 'PostgreSQL database name for the temporary migration database'
+        required: false
+        default: 'mermerd_db'
+        type: string
+      mermerd_version:
+        description: 'Mermerd release version to use'
+        required: false
+        default: '0.13.0'
+        type: string
+      show_all_constraints:
+        description: 'Show all constraints including those referencing non-selected tables'
+        required: false
+        default: true
+        type: boolean
+      show_descriptions:
+        description: 'Comma-separated descriptions to show (enumValues, columnComments, notNull)'
+        required: false
+        default: 'enumValues,columnComments,notNull'
+        type: string
+      ignore_tables:
+        description: 'Comma-separated list of table name patterns to ignore (supports regex)'
+        required: false
+        default: 'flyway_schema_history'
+        type: string
+      commit_message:
+        description: 'Git commit message for the README update'
+        required: false
+        default: 'chore: update mermerd ERD diagram'
+        type: string
+      action_repository:
+        description: 'The repository containing this reusable workflow (org/repo format)'
+        required: false
+        default: 'taonity/mermerd-flyway-github-action'
+        type: string
+
+jobs:
+  generate-erd:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for migration changes
+        id: changes
+        run: |
+          IFS=',' read -ra PATHS <<< "${{ inputs.migration_paths }}"
+          CHANGED=false
+
+          if ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "First commit detected, will generate diagram"
+            CHANGED=true
+          else
+            for path in "${PATHS[@]}"; do
+              path=$(echo "$path" | xargs)
+              if git diff --name-only HEAD~1 HEAD -- "$path" | grep -q .; then
+                CHANGED=true
+                echo "Changes detected in: $path"
+                break
+              fi
+            done
+          fi
+
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Migration changes detected: $CHANGED"
+
+      - name: Compute Flyway locations
+        if: steps.changes.outputs.changed == 'true'
+        id: flyway
+        run: |
+          IFS=',' read -ra PATHS <<< "${{ inputs.migration_paths }}"
+          LOCATIONS=""
+          for path in "${PATHS[@]}"; do
+            path=$(echo "$path" | xargs)
+            [ -n "$LOCATIONS" ] && LOCATIONS="${LOCATIONS},"
+            LOCATIONS="${LOCATIONS}filesystem:/workspace/${path}"
+          done
+          echo "locations=$LOCATIONS" >> "$GITHUB_OUTPUT"
+          echo "Flyway locations: $LOCATIONS"
+
+      - name: Checkout action repository
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.action_repository }}
+          path: .mermerd-action
+
+      - name: Start PostgreSQL and run Flyway migrations
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          DB_NAME: ${{ inputs.db_name }}
+          FLYWAY_LOCATIONS: ${{ steps.flyway.outputs.locations }}
+          WORKSPACE_PATH: ${{ github.workspace }}
+        run: |
+          docker compose -f .mermerd-action/docker-compose.yml up -d postgres
+          docker compose -f .mermerd-action/docker-compose.yml run --rm flyway
+
+      - name: Download mermerd
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          VERSION="${{ inputs.mermerd_version }}"
+          curl -fsSL "https://github.com/KarnerTh/mermerd/releases/download/v${VERSION}/mermerd_${VERSION}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin mermerd
+          chmod +x /usr/local/bin/mermerd
+
+      - name: Generate mermerd config and produce ERD
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          {
+            echo 'connectionString: "postgresql://mermerd:mermerd@localhost:5432/${{ inputs.db_name }}"'
+            echo 'schema:'
+            echo '  - "public"'
+            echo 'useAllTables: true'
+            echo 'showAllConstraints: ${{ inputs.show_all_constraints }}'
+            echo 'encloseWithMermaidBackticks: true'
+            echo 'outputFileName: "/tmp/mermerd-output.mmd"'
+            echo 'debug: true'
+            echo 'omitConstraintLabels: false'
+            echo 'omitAttributeKeys: false'
+            echo 'showDescriptions:'
+            IFS=',' read -ra DESCS <<< "${{ inputs.show_descriptions }}"
+            for d in "${DESCS[@]}"; do
+              echo "  - $(echo "$d" | xargs)"
+            done
+            echo 'ignoreTables:'
+            IFS=',' read -ra TABLES <<< "${{ inputs.ignore_tables }}"
+            for t in "${TABLES[@]}"; do
+              echo "  - $(echo "$t" | xargs)"
+            done
+          } > /tmp/mermerd.yaml
+
+          echo "--- Generated mermerd.yaml ---"
+          cat /tmp/mermerd.yaml
+          echo "---"
+
+          mermerd --runConfig /tmp/mermerd.yaml
+
+      - name: Update README mermaid block
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          README="${{ inputs.readme_path }}"
+          OUTPUT="/tmp/mermerd-output.mmd"
+
+          if [ ! -f "$README" ]; then
+            echo "::error::README not found: $README"
+            exit 1
+          fi
+
+          if ! grep -q '<!-- mermerd-start -->' "$README"; then
+            echo "::error::Marker <!-- mermerd-start --> not found in $README"
+            exit 1
+          fi
+
+          if ! grep -q '<!-- mermerd-end -->' "$README"; then
+            echo "::error::Marker <!-- mermerd-end --> not found in $README"
+            exit 1
+          fi
+
+          awk -v output="$OUTPUT" '
+            /<!-- mermerd-start -->/ {
+              print
+              while ((getline line < output) > 0) print line
+              skip = 1
+              next
+            }
+            /<!-- mermerd-end -->/ {
+              skip = 0
+              print
+              next
+            }
+            !skip
+          ' "$README" > "${README}.tmp"
+
+          mv "${README}.tmp" "$README"
+          echo "Updated mermaid diagram in $README"
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add "${{ inputs.readme_path }}"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit - diagram is already up to date"
+          else
+            git commit -m "${{ inputs.commit_message }}"
+            git push
+          fi
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: docker compose -f .mermerd-action/docker-compose.yml down -v 2>/dev/null || true

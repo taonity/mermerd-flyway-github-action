@@ -1,0 +1,16 @@
+connectionString: "postgresql://mermerd:mermerd@localhost:5432/mermerd_db"
+schema:
+  - "public"
+useAllTables: true
+showAllConstraints: true
+encloseWithMermaidBackticks: true
+outputFileName: "/tmp/mermerd-output.mmd"
+debug: true
+omitConstraintLabels: false
+omitAttributeKeys: false
+showDescriptions:
+  - enumValues
+  - columnComments
+  - notNull
+ignoreTables:
+  - flyway_schema_history
