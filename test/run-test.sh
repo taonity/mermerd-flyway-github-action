@@ -20,7 +20,27 @@ trap cleanup EXIT
 
 echo "==> Starting PostgreSQL and running Flyway migrations..."
 docker compose -f "$PROJECT_DIR/docker-compose.yml" up -d postgres
-docker compose -f "$PROJECT_DIR/docker-compose.yml" run --rm flyway
+
+FLYWAY_ENV_ARGS=()
+
+if [ -n "${FLYWAY_PLACEHOLDER_PREFIX:-}" ]; then
+  FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDER_PREFIX=$FLYWAY_PLACEHOLDER_PREFIX")
+fi
+
+if [ -n "${FLYWAY_PLACEHOLDER_SUFFIX:-}" ]; then
+  FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDER_SUFFIX=$FLYWAY_PLACEHOLDER_SUFFIX")
+fi
+
+if [ -n "${FLYWAY_PLACEHOLDERS:-}" ]; then
+  IFS=',' read -ra PAIRS <<< "$FLYWAY_PLACEHOLDERS"
+  for pair in "${PAIRS[@]}"; do
+    key=$(echo "$pair" | cut -d= -f1 | xargs | tr '[:lower:]' '[:upper:]')
+    value=$(echo "$pair" | cut -d= -f2- | xargs)
+    FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDERS_${key}=${value}")
+  done
+fi
+
+docker compose -f "$PROJECT_DIR/docker-compose.yml" run --rm "${FLYWAY_ENV_ARGS[@]}" flyway
 
 echo "==> Downloading mermerd v${MERMERD_VERSION}..."
 if [ ! -x "$MERMERD_BIN" ]; then

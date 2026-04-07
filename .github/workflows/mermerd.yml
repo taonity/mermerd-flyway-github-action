@@ -42,6 +42,21 @@ on:
         required: false
         default: 'chore: update mermerd ERD diagram'
         type: string
+      flyway_placeholder_prefix:
+        description: 'Custom Flyway placeholder prefix (e.g. "{{ " for Helm-style templates)'
+        required: false
+        default: ''
+        type: string
+      flyway_placeholder_suffix:
+        description: 'Custom Flyway placeholder suffix (e.g. " }}" for Helm-style templates)'
+        required: false
+        default: ''
+        type: string
+      flyway_placeholders:
+        description: 'Comma-separated key=value placeholder pairs (e.g. app_user=dummy,app_password=dummy,db_name=mydb)'
+        required: false
+        default: ''
+        type: string
       action_repository:
         description: 'The repository containing this reusable workflow (org/repo format)'
         required: false
@@ -109,9 +124,32 @@ jobs:
           DB_NAME: ${{ inputs.db_name }}
           FLYWAY_LOCATIONS: ${{ steps.flyway.outputs.locations }}
           WORKSPACE_PATH: ${{ github.workspace }}
+          INPUT_PLACEHOLDER_PREFIX: ${{ inputs.flyway_placeholder_prefix }}
+          INPUT_PLACEHOLDER_SUFFIX: ${{ inputs.flyway_placeholder_suffix }}
+          INPUT_PLACEHOLDERS: ${{ inputs.flyway_placeholders }}
         run: |
           docker compose -f .mermerd-action/docker-compose.yml up -d postgres
-          docker compose -f .mermerd-action/docker-compose.yml run --rm flyway
+
+          FLYWAY_ENV_ARGS=()
+
+          if [ -n "$INPUT_PLACEHOLDER_PREFIX" ]; then
+            FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDER_PREFIX=$INPUT_PLACEHOLDER_PREFIX")
+          fi
+
+          if [ -n "$INPUT_PLACEHOLDER_SUFFIX" ]; then
+            FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDER_SUFFIX=$INPUT_PLACEHOLDER_SUFFIX")
+          fi
+
+          if [ -n "$INPUT_PLACEHOLDERS" ]; then
+            IFS=',' read -ra PAIRS <<< "$INPUT_PLACEHOLDERS"
+            for pair in "${PAIRS[@]}"; do
+              key=$(echo "$pair" | cut -d= -f1 | xargs | tr '[:lower:]' '[:upper:]')
+              value=$(echo "$pair" | cut -d= -f2- | xargs)
+              FLYWAY_ENV_ARGS+=(-e "FLYWAY_PLACEHOLDERS_${key}=${value}")
+            done
+          fi
+
+          docker compose -f .mermerd-action/docker-compose.yml run --rm "${FLYWAY_ENV_ARGS[@]}" flyway
 
       - name: Download mermerd
         if: steps.changes.outputs.changed == 'true'

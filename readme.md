@@ -62,6 +62,9 @@ Whenever migration files change on push to `main`, the workflow will regenerate 
 | `show_descriptions` | No | `enumValues,columnComments,notNull` | Comma-separated descriptions to include |
 | `ignore_tables` | No | `flyway_schema_history` | Comma-separated table patterns to ignore (supports regex) |
 | `commit_message` | No | `chore: update mermerd ERD diagram` | Git commit message |
+| `flyway_placeholder_prefix` | No | | Custom Flyway placeholder prefix (e.g. `{{ ` for Helm-style templates) |
+| `flyway_placeholder_suffix` | No | | Custom Flyway placeholder suffix (e.g. ` }}` for Helm-style templates) |
+| `flyway_placeholders` | No | | Comma-separated `key=value` placeholder pairs (e.g. `app_user=dummy,db_name=mydb`) |
 
 ## Full example
 
@@ -88,6 +91,21 @@ jobs:
       contents: write
 ```
 
+## Flyway placeholders
+
+If your migration scripts use [Flyway placeholders](https://documentation.red-gate.com/fd/placeholders-configuration-184127475.html) with non-default delimiters, pass the prefix, suffix, and placeholder values:
+
+```yaml
+uses: <your-org>/mermerd-flyway-github-action/.github/workflows/mermerd.yml@main
+with:
+  migration_paths: 'db/migrations/init,db/migrations/tables'
+  flyway_placeholder_prefix: '{{ '
+  flyway_placeholder_suffix: ' }}'
+  flyway_placeholders: 'app_user=dummy,app_password=dummy,db_name=mermerd_db'
+```
+
+The placeholder values are only used for the ephemeral migration — any value will work since the database is discarded after ERD generation.
+
 ## Local testing
 
 A test script and dummy SQL migration are provided in the `test/` directory.
@@ -104,7 +122,16 @@ docker compose -f docker-compose.yml run --rm flyway
 docker compose -f docker-compose.yml down -v
 ```
 
-Defaults in [test/run-test.sh](test/run-test.sh) point to `test/sql`. Override any variable by exporting it before running, e.g. `export WORKSPACE_PATH=/path/to/client-repo`.
+Defaults in [test/run-test.sh](test/run-test.sh) point to `test/sql`. Override any variable by exporting it before running, e.g.:
+
+```bash
+export WORKSPACE_PATH=/path/to/client-repo
+
+# For migrations with placeholders:
+export FLYWAY_PLACEHOLDER_PREFIX='{{ '
+export FLYWAY_PLACEHOLDER_SUFFIX=' }}'
+export FLYWAY_PLACEHOLDERS='app_user=dummy,app_password=dummy,db_name=mermerd_db'
+```
 
 ## README marker format
 
