@@ -42,6 +42,11 @@ on:
         required: false
         default: 'chore: update mermerd ERD diagram'
         type: string
+      force_generate:
+        description: 'Skip change detection and always generate the diagram (useful for initial setup or manual refresh)'
+        required: false
+        default: false
+        type: boolean
       flyway_placeholder_prefix:
         description: 'Custom Flyway placeholder prefix (e.g. "{{ " for Helm-style templates)'
         required: false
@@ -80,7 +85,10 @@ jobs:
           IFS=',' read -ra PATHS <<< "${{ inputs.migration_paths }}"
           CHANGED=false
 
-          if ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+          if [[ "${{ inputs.force_generate }}" == "true" ]]; then
+            echo "force_generate is set, skipping change detection"
+            CHANGED=true
+          elif ! git rev-parse HEAD~1 >/dev/null 2>&1; then
             echo "First commit detected, will generate diagram"
             CHANGED=true
           else

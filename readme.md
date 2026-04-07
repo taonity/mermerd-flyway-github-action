@@ -65,6 +65,7 @@ Whenever migration files change on push to `main`, the workflow will regenerate 
 | `flyway_placeholder_prefix` | No | | Custom Flyway placeholder prefix (e.g. `{{ ` for Helm-style templates) |
 | `flyway_placeholder_suffix` | No | | Custom Flyway placeholder suffix (e.g. ` }}` for Helm-style templates) |
 | `flyway_placeholders` | No | | Comma-separated `key=value` placeholder pairs (e.g. `app_user=dummy,db_name=mydb`) |
+| `force_generate` | No | `false` | Skip change detection and always generate the diagram |
 
 ## Full example
 
@@ -90,6 +91,37 @@ jobs:
     permissions:
       contents: write
 ```
+
+## Initial setup / bootstrap
+
+The workflow only runs when migration files change in the triggering commit. When you first add the caller workflow to an existing repo, no migration files changed in that commit, so the diagram is never seeded.
+
+Bootstrap it once with a `workflow_dispatch` job that passes `force_generate: true`:
+
+```yaml
+name: Update ERD Diagram
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_generate:
+        description: 'Force diagram regeneration even without migration changes'
+        type: boolean
+        default: false
+
+jobs:
+  update-erd:
+    uses: <your-org>/mermerd-flyway-github-action/.github/workflows/mermerd.yml@main
+    with:
+      migration_paths: 'db/migrations'
+      force_generate: ${{ github.event_name == 'workflow_dispatch' && inputs.force_generate }}
+    permissions:
+      contents: write
+```
+
+After merging, go to **Actions → Update ERD Diagram → Run workflow** and check **Force diagram regeneration**. Subsequent pushes will use normal change detection.
 
 ## Flyway placeholders
 
