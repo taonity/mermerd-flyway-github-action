@@ -1,0 +1,41 @@
+erDiagram
+    direction TB
+    "app_user" {
+        character_varying access_status "NOT NULL"
+        character_varying display_name "NOT NULL"
+        character_varying email "NOT NULL"
+        character_varying google_id PK "NOT NULL"
+        character_varying picture_url
+        character_varying requested_role
+        character_varying role "NOT NULL"
+    }
+    "audit_log" {
+        character_varying action "NOT NULL"
+        character_varying actor_email "NOT NULL"
+        character_varying actor_google_id "NOT NULL"
+        character_varying id PK "NOT NULL"
+        timestamp_without_time_zone occurred_at "NOT NULL"
+        character_varying target_id
+        character_varying target_type "NOT NULL"
+    }
+    "config_override" {
+        character_varying config_key PK "NOT NULL"
+        timestamp_without_time_zone updated_at "NOT NULL"
+        character_varying updated_by "NOT NULL"
+        character_varying value_json "NOT NULL"
+    }
+    "spring_session" {
+        bigint creation_time "NOT NULL"
+        bigint expiry_time "NOT NULL"
+        bigint last_access_time "NOT NULL"
+        integer max_inactive_interval "NOT NULL"
+        character primary_id PK "NOT NULL"
+        character_varying principal_name
+        character session_id "NOT NULL"
+    }
+    "spring_session_attributes" {
+        bytea attribute_bytes "NOT NULL"
+        character_varying attribute_name PK "NOT NULL"
+        character session_primary_id PK,FK "NOT NULL"
+    }
+    "spring_session_attributes" }o--|| "spring_session" : "session_primary_id"

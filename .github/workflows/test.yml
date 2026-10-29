@@ -1,0 +1,24 @@
+name: Test Mermaid formatter
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        schema_generator: [tbls, mermerd]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test parser, diagram grouping, relationships, and README generation
+        run: python3 -m unittest discover -s test -p 'test_*.py' -v
+      - name: Test PostgreSQL, Flyway, schema extraction, and Markdown formatting together
+        env:
+          SCHEMA_GENERATOR: ${{ matrix.schema_generator }}
+        run: bash test/run-test.sh

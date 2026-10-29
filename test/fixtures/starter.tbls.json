@@ -1,0 +1,349 @@
+{
+  "name": "mermerd_db",
+  "tables": [
+    {
+      "name": "public.app_user",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "google_id",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "display_name",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "picture_url",
+          "type": "varchar",
+          "nullable": true
+        },
+        {
+          "name": "role",
+          "type": "varchar(20)",
+          "nullable": false,
+          "default": "'NONE'::character varying"
+        },
+        {
+          "name": "access_status",
+          "type": "varchar(20)",
+          "nullable": false,
+          "default": "'NONE'::character varying"
+        },
+        {
+          "name": "requested_role",
+          "type": "varchar(20)",
+          "nullable": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "app_user_pkey",
+          "def": "CREATE UNIQUE INDEX app_user_pkey ON public.app_user USING btree (google_id)",
+          "table": "public.app_user",
+          "columns": [
+            "google_id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "app_user_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (google_id)",
+          "table": "public.app_user",
+          "referenced_table": "",
+          "columns": [
+            "google_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.audit_log",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "id",
+          "type": "varchar(36)",
+          "nullable": false
+        },
+        {
+          "name": "action",
+          "type": "varchar(40)",
+          "nullable": false
+        },
+        {
+          "name": "target_type",
+          "type": "varchar(40)",
+          "nullable": false
+        },
+        {
+          "name": "target_id",
+          "type": "varchar(64)",
+          "nullable": true
+        },
+        {
+          "name": "actor_google_id",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "actor_email",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamp without time zone",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "audit_log_pkey",
+          "def": "CREATE UNIQUE INDEX audit_log_pkey ON public.audit_log USING btree (id)",
+          "table": "public.audit_log",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "idx_audit_log_occurred_at",
+          "def": "CREATE INDEX idx_audit_log_occurred_at ON public.audit_log USING btree (occurred_at)",
+          "table": "public.audit_log",
+          "columns": [
+            "occurred_at"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "audit_log_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.audit_log",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.config_override",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "config_key",
+          "type": "varchar(200)",
+          "nullable": false
+        },
+        {
+          "name": "value_json",
+          "type": "varchar(20000)",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false
+        },
+        {
+          "name": "updated_by",
+          "type": "varchar(320)",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "config_override_pkey",
+          "def": "CREATE UNIQUE INDEX config_override_pkey ON public.config_override USING btree (config_key)",
+          "table": "public.config_override",
+          "columns": [
+            "config_key"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "config_override_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (config_key)",
+          "table": "public.config_override",
+          "referenced_table": "",
+          "columns": [
+            "config_key"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.spring_session",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "primary_id",
+          "type": "character(36)",
+          "nullable": false
+        },
+        {
+          "name": "session_id",
+          "type": "character(36)",
+          "nullable": false
+        },
+        {
+          "name": "creation_time",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "last_access_time",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "max_inactive_interval",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "expiry_time",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "principal_name",
+          "type": "varchar(100)",
+          "nullable": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "spring_session_pk",
+          "def": "CREATE UNIQUE INDEX spring_session_pk ON public.spring_session USING btree (primary_id)",
+          "table": "public.spring_session",
+          "columns": [
+            "primary_id"
+          ]
+        },
+        {
+          "name": "spring_session_ix1",
+          "def": "CREATE UNIQUE INDEX spring_session_ix1 ON public.spring_session USING btree (session_id)",
+          "table": "public.spring_session",
+          "columns": [
+            "session_id"
+          ]
+        },
+        {
+          "name": "spring_session_ix2",
+          "def": "CREATE INDEX spring_session_ix2 ON public.spring_session USING btree (expiry_time)",
+          "table": "public.spring_session",
+          "columns": [
+            "expiry_time"
+          ]
+        },
+        {
+          "name": "spring_session_ix3",
+          "def": "CREATE INDEX spring_session_ix3 ON public.spring_session USING btree (principal_name)",
+          "table": "public.spring_session",
+          "columns": [
+            "principal_name"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "spring_session_pk",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (primary_id)",
+          "table": "public.spring_session",
+          "referenced_table": "",
+          "columns": [
+            "primary_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.spring_session_attributes",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "session_primary_id",
+          "type": "character(36)",
+          "nullable": false
+        },
+        {
+          "name": "attribute_name",
+          "type": "varchar(200)",
+          "nullable": false
+        },
+        {
+          "name": "attribute_bytes",
+          "type": "bytea",
+          "nullable": false
+        }
+      ],
+      "indexes": [
+        {
+          "name": "spring_session_attributes_pk",
+          "def": "CREATE UNIQUE INDEX spring_session_attributes_pk ON public.spring_session_attributes USING btree (session_primary_id, attribute_name)",
+          "table": "public.spring_session_attributes",
+          "columns": [
+            "session_primary_id",
+            "attribute_name"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "spring_session_attributes_fk",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (session_primary_id) REFERENCES spring_session(primary_id) ON DELETE CASCADE",
+          "table": "public.spring_session_attributes",
+          "referenced_table": "public.spring_session",
+          "columns": [
+            "session_primary_id"
+          ],
+          "referenced_columns": [
+            "primary_id"
+          ]
+        },
+        {
+          "name": "spring_session_attributes_pk",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (session_primary_id, attribute_name)",
+          "table": "public.spring_session_attributes",
+          "referenced_table": "",
+          "columns": [
+            "session_primary_id",
+            "attribute_name"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "table": "public.spring_session_attributes",
+      "columns": [
+        "session_primary_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.spring_session",
+      "parent_columns": [
+        "primary_id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (session_primary_id) REFERENCES spring_session(primary_id) ON DELETE CASCADE"
+    }
+  ]
+}

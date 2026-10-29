@@ -1,4 +1,4 @@
-name: Generate Mermerd ERD
+name: Generate Database ERD
 
 on:
   workflow_call:
@@ -12,10 +12,25 @@ on:
         required: false
         default: 'README.md'
         type: string
+      tables_per_diagram:
+        description: 'Tables per row in the name-first Mermaid grid (1, 2, or 3)'
+        required: false
+        default: 3
+        type: number
       db_name:
         description: 'PostgreSQL database name for the temporary migration database'
         required: false
         default: 'mermerd_db'
+        type: string
+      schema_generator:
+        description: 'Schema extractor: tbls (structured JSON) or mermerd (legacy Mermaid text)'
+        required: false
+        default: 'tbls'
+        type: string
+      tbls_version:
+        description: 'tbls release version to use'
+        required: false
+        default: '1.96.1'
         type: string
       mermerd_version:
         description: 'Mermerd release version to use'
@@ -126,6 +141,16 @@ jobs:
           repository: ${{ inputs.action_repository }}
           path: .mermerd-action
 
+      - name: Validate schema generator
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          SCHEMA_GENERATOR: ${{ inputs.schema_generator }}
+        run: |
+          case "$SCHEMA_GENERATOR" in
+            tbls|mermerd) ;;
+            *) echo '::error::schema_generator must be tbls or mermerd'; exit 1 ;;
+          esac
+
       - name: Start PostgreSQL and run Flyway migrations
         if: steps.changes.outputs.changed == 'true'
         env:
@@ -159,8 +184,25 @@ jobs:
 
           docker compose -f .mermerd-action/docker-compose.yml run --rm "${FLYWAY_ENV_ARGS[@]}" flyway
 
+      - name: Download tbls
+        if: steps.changes.outputs.changed == 'true' && inputs.schema_generator == 'tbls'
+        env:
+          TBLS_VERSION: ${{ inputs.tbls_version }}
+        run: |
+          curl -fsSL "https://github.com/k1LoW/tbls/releases/download/v${TBLS_VERSION}/tbls_v${TBLS_VERSION}_linux_amd64.tar.gz" \
+            | tar xz -C /usr/local/bin tbls
+          chmod +x /usr/local/bin/tbls
+
+      - name: Export PostgreSQL schema as tbls JSON
+        if: steps.changes.outputs.changed == 'true' && inputs.schema_generator == 'tbls'
+        env:
+          DB_NAME: ${{ inputs.db_name }}
+        run: |
+          tbls out "postgres://mermerd:mermerd@localhost:5432/${DB_NAME}?sslmode=disable" \
+            --include 'public.*' --format json --out /tmp/tbls-schema.json
+
       - name: Download mermerd
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true' && inputs.schema_generator == 'mermerd'
         run: |
           VERSION="${{ inputs.mermerd_version }}"
           curl -fsSL "https://github.com/KarnerTh/mermerd/releases/download/v${VERSION}/mermerd_${VERSION}_linux_amd64.tar.gz" \
@@ -168,7 +210,7 @@ jobs:
           chmod +x /usr/local/bin/mermerd
 
       - name: Generate mermerd config and produce ERD
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true' && inputs.schema_generator == 'mermerd'
         run: |
           {
             echo 'connectionString: "postgresql://mermerd:mermerd@localhost:5432/${{ inputs.db_name }}"'
@@ -199,57 +241,38 @@ jobs:
 
           mermerd --runConfig /tmp/mermerd.yaml
 
-      - name: Update README mermaid block
+      - name: Format Mermaid Markdown and update README
         if: steps.changes.outputs.changed == 'true'
+        env:
+          README_PATH: ${{ inputs.readme_path }}
+          TABLES_PER_DIAGRAM: ${{ inputs.tables_per_diagram }}
+          SCHEMA_PATH: ${{ inputs.schema_generator == 'tbls' && '/tmp/tbls-schema.json' || '/tmp/mermerd-output.mmd' }}
+          IGNORE_TABLES: ${{ inputs.ignore_tables }}
+          SHOW_DESCRIPTIONS: ${{ inputs.show_descriptions }}
+          SHOW_ALL_CONSTRAINTS: ${{ inputs.show_all_constraints }}
         run: |
-          README="${{ inputs.readme_path }}"
-          OUTPUT="/tmp/mermerd-output.mmd"
-
-          if [ ! -f "$README" ]; then
-            echo "::error::README not found: $README"
-            exit 1
-          fi
-
-          if ! grep -q '<!-- mermerd-start -->' "$README"; then
-            echo "::error::Marker <!-- mermerd-start --> not found in $README"
-            exit 1
-          fi
-
-          if ! grep -q '<!-- mermerd-end -->' "$README"; then
-            echo "::error::Marker <!-- mermerd-end --> not found in $README"
-            exit 1
-          fi
-
-          awk -v output="$OUTPUT" '
-            /<!-- mermerd-start -->/ {
-              print
-              while ((getline line < output) > 0) print line
-              skip = 1
-              next
-            }
-            /<!-- mermerd-end -->/ {
-              skip = 0
-              print
-              next
-            }
-            !skip
-          ' "$README" > "${README}.tmp"
-
-          mv "${README}.tmp" "$README"
-          echo "Updated mermaid diagram in $README"
+          python3 .mermerd-action/scripts/format-mermaid.py "$SCHEMA_PATH" \
+            --readme "$README_PATH" \
+            --tables-per-diagram "$TABLES_PER_DIAGRAM" \
+            --ignore-tables "$IGNORE_TABLES" \
+            --show-descriptions "$SHOW_DESCRIPTIONS" \
+            --show-all-constraints "$SHOW_ALL_CONSTRAINTS"
 
       - name: Commit and push changes
         if: steps.changes.outputs.changed == 'true'
+        env:
+          README_PATH: ${{ inputs.readme_path }}
+          COMMIT_MESSAGE: ${{ inputs.commit_message }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add "${{ inputs.readme_path }}"
+          git add -- "$README_PATH"
 
           if git diff --cached --quiet; then
             echo "No changes to commit - diagram is already up to date"
           else
-            git commit -m "${{ inputs.commit_message }}"
+            git commit -m "$COMMIT_MESSAGE"
             git push
           fi
 
