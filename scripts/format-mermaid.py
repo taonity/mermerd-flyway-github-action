@@ -310,6 +310,17 @@ def palette_css(prefix):
     return ''.join(rules)
 
 
+SCHEME_CSS = (
+    # The viewers can paint a dark background without declaring color-scheme.
+    '.schema-table,.schema-edge{color-scheme:light dark;}'
+    # @scope keeps host selectors outside Mermaid's diagram-ID CSS prefix.
+    '@scope ([data-color-mode=dark],.vscode-dark,.vscode-high-contrast,[data-theme=dark])'
+    '{.schema-table,.schema-edge{color-scheme:dark;}}'
+    '@scope ([data-color-mode=light],.vscode-light,.vscode-high-contrast-light,[data-theme=light])'
+    '{.schema-table,.schema-edge{color-scheme:light;}}'
+)
+
+
 SCHEMA_CSS = (
     '.schema-table{border-collapse:collapse;white-space:nowrap;font:12px/1.3 Verdana,sans-serif;'
     'color:' + adaptive_color('#20344d', '#dce5f1') + ';background-color:' + adaptive_color('#ffffff', '#18202b')
@@ -328,6 +339,7 @@ SCHEMA_CSS = (
     + ';color:' + adaptive_color(TYPE_COLORS['DateTime'][2], DARK_TYPE_COLORS['DateTime'][2]) + ';}'
     '.schema-edge{display:inline-block;padding:2px 4px;text-align:left;font:12px/1.3 Verdana,sans-serif;'
     'color:' + adaptive_color('#20344d', '#dce5f1') + ';background:' + adaptive_color('#e8eef5', '#2a3544') + ';}'
+    + SCHEME_CSS
 )
 
 
